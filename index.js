@@ -4,11 +4,16 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const baseUrl = 'https://v2cdn.velog.io/graphql';
-
 const app = express();
 
-app.get('/getPostIdList', async (req, res) => {
+let totalViews = 0;
+
+app.get('/getTotalViews', async (req, res) => {
     try {
+        const username = process.env.USER_NAME;
+        const accessToken = process.env.ACCESS_TOKEN;
+        const refreshToken = process.env.REFRESH_TOKEN;
+        
         const response = await axios.post(baseUrl, {
             query: `
             query Posts($cursor: ID, $username: String, $temp_only: Boolean, $tag: String, $limit: Int) {
@@ -19,7 +24,7 @@ app.get('/getPostIdList', async (req, res) => {
               }
             `,
             variables: {
-                username: 'dlehddnr99',
+                username: username,
                 limit: 100,
                 cursor: '',
             }
@@ -28,49 +33,42 @@ app.get('/getPostIdList', async (req, res) => {
         const posts = response.data.data.posts;
         const postIdList = posts.map((post) => post.id);
 
-        res.json(postIdList);
-
+        for(const postId of postIdList) {
+            try {
+                const response = await axios.post(baseUrl, {
+                  query: `
+                  query GetStats($post_id: ID!) {
+                      getStats(post_id: $post_id) {
+                          total
+                          count_by_day {
+                              count
+                              day
+                          }
+                      }
+                  }
+                  `,
+                  variables: {
+                      post_id: postId
+                  }
+                }, {
+                  headers: {
+                      Cookie: `refresh_token=${refreshToken}; access_token=${accessToken}`,
+                  }
+                });
+                const views = response.data.data.getStats.total;
+                totalViews += views;          
+              } catch(error) {
+                  console.error(error);
+              }
+        }
+        res.json({totalViews: totalViews});
     } catch(error) {
         console.error(error);
         res.status(500).json({error: 'Internal Server Error'});
     }
 })
 
-app.get('/getStatusOfCertainPost', async (req, res) => {
-    try {
-     
-      const accessToken = process.env.ACCESS_TOKEN;
-      const refreshToken = process.env.REFRESH_TOKEN;
 
-      const response = await axios.post(baseUrl, {
-        query: `
-        query GetStats($post_id: ID!) {
-            getStats(post_id: $post_id) {
-                total
-                count_by_day {
-                    count
-                    day
-                }
-            }
-        }
-        `,
-        variables: {
-            post_id: "7f3fd348-8c4d-405e-a701-818586c92acf"
-        }
-      }, {
-        headers: {
-            Cookie: `refresh_token=${refreshToken}; access_token=${accessToken}`,
-        }
-      });
-
-      console.log(response.data);
-      res.json(response.data);
-
-    } catch(error) {
-        console.error(error);
-        res.status(500).json({error: 'Internal Server Error'});
-    }
-})
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
