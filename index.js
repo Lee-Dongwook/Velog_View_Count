@@ -1,5 +1,7 @@
 const express = require('express');
 const axios = require('axios');
+const dotenv = require('dotenv');
+dotenv.config();
 
 const baseUrl = 'https://v2cdn.velog.io/graphql';
 
@@ -36,6 +38,10 @@ app.get('/getPostIdList', async (req, res) => {
 
 app.get('/getStatusOfCertainPost', async (req, res) => {
     try {
+     
+      const accessToken = process.env.ACCESS_TOKEN;
+      const refreshToken = process.env.REFRESH_TOKEN;
+
       const response = await axios.post(baseUrl, {
         query: `
         query GetStats($post_id: ID!) {
@@ -51,9 +57,14 @@ app.get('/getStatusOfCertainPost', async (req, res) => {
         variables: {
             post_id: "7f3fd348-8c4d-405e-a701-818586c92acf"
         }
-      })
+      }, {
+        headers: {
+            Cookie: `refresh_token=${refreshToken}; access_token=${accessToken}`,
+        }
+      });
 
       console.log(response.data);
+      res.json(response.data);
 
     } catch(error) {
         console.error(error);
